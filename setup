@@ -52,11 +52,15 @@ HACKPXVERSION="20250502T1020"
 OCVERSION="1.0.4"
 DEFAULT_VM_PREFIX="HACK-"
 DEFAULT_RAM_SIZE=4096
+#added datetime plus dir for file backups
+NOW=$(printf "%(%F_%H%M%S)T")
+BAKDIR=${LOGDIR}/FileBackups_${NOW}
 
 if [ `lscpu | grep "Vendor ID" | grep -i amd | wc -l` -eq 1 ]; then OSX_PLATFORM="AMD"; else OSX_PLATFORM="INTEL"; fi
 
 if [ ! -e ${TMPDIR} ]; then mkdir ${TMPDIR}; fi;
 if [ ! -e ${LOGDIR} ]; then mkdir ${LOGDIR}; fi;
+if [ ! -e ${BAKDIR} ]; then mkdir ${BAKDIR}; fi;
 
 ################################################################################################################################################################################################
 ################################################################################################################################################################################################
@@ -68,7 +72,10 @@ then
 	mkdir -p ${LOGDIR}
 
 	LOGFILE=${LOGDIR}/prerequisites-setup.log
-	
+# added LOGFILE initialization
+	touch ${LOGFILE}
+	echo "Starting setup of prequisites" >>${LOGFILE}
+	echo "Creating backups of changed files in ${BAKDIR}" >>${LOGFILE}
 	echo " "
 	echo "OSX-PROXMOX (Version ${HACKPXVERSION}) - GABRIEL LUCHINA - https://osx-proxmox.com"
 	echo " "
@@ -79,15 +86,26 @@ then
 	echo " "
 
 	cp ${SCRIPT_DIR}/EFI/*.iso /var/lib/vz/template/iso
+# added: backup .bashrc if it exists
+	if [ -e /root/.bashrc ]; then cp /root/.bashrc ${BAKDIR}/.bashrc; echo "Created backup copy of /root/.bashrc" >>${LOGFILE}; else echo "Creating /root/.bashrc" >>${LOGFILE}; fi;
 
 	echo "alias osx-setup='${SCRIPT_DIR}/setup'" >> /root/.bashrc
 
+# added: backup environment file if it exists
+	if [ -e /etc/environment ]; then cp /etc/environment ${BAKDIR}/environment; echo "Created backup copy of /etc/environment" >>${LOGFILE}; else echo "Creating /etc/environment" >>${LOGFILE}; fi;
+
 	echo -e "LANG=en_US.UTF-8\nLC_ALL=en_US.UTF-8" > /etc/environment
+
+# added: backup .vimrc file if it exists
+	if [ -e  ~/.vimrc ]; then cp  ~/.vimrc ${BAKDIR}/.vimrc; echo "Created backup copy of ~/.vimrc" >>${LOGFILE}; else echo "Creating ~/.vimrc" >>${LOGFILE}; fi;
+
 	echo "set mouse-=a" > ~/.vimrc
 
-	if [ -e /etc/apt/sources.list.d/pve-enterprise.list ]; then rm -rf /etc/apt/sources.list.d/pve-enterprise.list; fi;
+# disabled: do not remove the enterprise repository!!
+#	if [ -e /etc/apt/sources.list.d/pve-enterprise.list ]; then mv /etc/apt/sources.list.d/pve-enterprise.list /etc/apt/sources.list.d/pve-enterprise.list.backup; fi;
 
-	apt-get update > ${LOGFILE} 2>> ${LOGFILE}
+# changed to add to logfile instead of create/overwrite
+	apt-get update >> ${LOGFILE} 2>> ${BAKFILE}
 
 	if [ $? -ne 0 ]
 	then 
@@ -100,11 +118,18 @@ then
 		if [ $? -ne 0 ]; then echo "Error with `apt-get update ...`"; exit; fi
 	fi
 
+# added logging of already installed packages
+	echo "List of packages already installed" >>${LOGFILE}
+	apt list --installed | grep 'vim\|unzip\|zip\|sysstat\|parted\|wget\|iptraf\|git\|htop' >>${LOGFILE}
+	echo "Installing vim unzip zip sysstat parted wget iptraf git htop" >>${LOGFILE}
 	apt install vim unzip zip sysstat parted wget iptraf git htop -y >> ${LOGFILE} 2>> ${LOGFILE}
 	if [ $? -ne 0 ]; then echo "Error with `apt-get install ...`"; exit; fi
 
+# added: backup grub if it exists, log changes (multiple!)
+	if [ -e /etc/default/grub ]; then cp /etc/default/grub ${BAKDIR}/grub; echo "Created backup copy of /etc/default/grub" >>${LOGFILE}; fi;
+	echo "Changing GRUB_TIMEOUT=5 to GRUB_TIMEOUT=0 in /etc/default/grub" >>${LOGFILE}
 	sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=0/g' /etc/default/grub
-
+	echo "Changing GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub" >>${LOGFILE}
 	if [ ${OSX_PLATFORM} == "AMD" ]
 	then
 		if [ `pveversion | grep -i '7.2\|7.3\|7.4\|8.0\|8.1\|8.2\|8.3\|8.4' | wc -l` -eq 1 ]
@@ -113,6 +138,7 @@ then
 		else
 			sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt video=vesafb:off video=efifb:off"/g' /etc/default/grub
 		fi
+		if [ -e /etc/modprobe.d/kvm-amd.conf ]; then cp /etc/modprobe.d/kvm-amd.conf ${LOGDIR}/kvm-amd.conf; echo "Created backup copy of /etc/modprobe.d/kvm-amd.conf" >>${LOGFILE}; fi;
 		echo "options kvm-amd nested=1" > /etc/modprobe.d/kvm-amd.conf
 	fi
 
@@ -124,13 +150,24 @@ then
 		else
 			sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt video=vesafb:off video=efifb:off"/g' /etc/default/grub
 		fi
+		if [ -e /etc/modprobe.d/kvm-intel.conf ]; then cp /etc/modprobe.d/kvm-intel.conf ${LOGDIR}/kvm-intel.conf; echo "Created backup copy of /etc/modprobe.d/kvm-intel.conf" >>${LOGFILE}; fi;
 		echo "options kvm-intel nested=Y" > /etc/modprobe.d/kvm-intel.conf
 	fi
 
+# added backup copy for /etc/modules
+	if [ -e /etc/modules ]; then cp /etc/modules ${LOGDIR}/modules; echo "Created backup copy of /etc/modules" >>${LOGFILE}; fi;
 	echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd\n" >> /etc/modules
+
+# added backup copy for /etc/modprobe.d/pve-blacklist.conf
+	if [ -e /etc/modprobe.d/pve-blacklist.conf ]; then cp /etc/modules ${LOGDIR}/pve-blacklist.conf; echo "Created backup copy of /etc/modprobe.d/pve-blacklist.conf" >>${LOGFILE}; fi;
 	echo -e "blacklist nouveau\nblacklist nvidia\nblacklist snd_hda_codec_hdmi\nblacklist snd_hda_intel\nblacklist snd_hda_codec\nblacklist snd_hda_core\nblacklist radeon\nblacklist amdgpu\n" >> /etc/modprobe.d/pve-blacklist.conf
 
+# added backup copy for /etc/modules
+	if [ -e /etc/modprobe.d/kvm.conf ]; then cp /etc/modprobe.d/kvm.conf ${LOGDIR}/kvm.conf; echo "Created backup copy of /etc/modprobe.d/kvm.conf" >>${LOGFILE}; fi;
 	echo "options kvm ignore_msrs=Y report_ignored_msrs=0" > /etc/modprobe.d/kvm.conf
+
+# added backup copy for /etc/modprobe.d/iommu_unsafe_interrupts.conf
+	if [ -e /etc/modprobe.d/iommu_unsafe_interrupts.conf ]; then cp /etc/modprobe.d/iommu_unsafe_interrupts.conf ${LOGDIR}/iommu_unsafe_interrupts.conf; echo "Created backup copy of /etc/modprobe.d/iommu_unsafe_interrupts.conf" >>${LOGFILE}; fi;
 	echo "options vfio_iommu_type1 allow_unsafe_interrupts=1" > /etc/modprobe.d/iommu_unsafe_interrupts.conf
 
 	sed -i.backup -z "s/res === null || res === undefined || \!res || res\n\t\t\t.data.status.toLowerCase() \!== 'active'/false/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
