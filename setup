@@ -54,18 +54,19 @@ DEFAULT_VM_PREFIX="HACK-"
 DEFAULT_RAM_SIZE=4096
 #added datetime plus dir for file backups
 NOW=$(printf "%(%F_%H%M%S)T")
-BAKDIR=${LOGDIR}/FileBackups_${NOW}
+BAKPATH=${LOGDIR}/FileBackups_${NOW}
+BAKDIR=${BAKPATH}/
 
 if [ `lscpu | grep "Vendor ID" | grep -i amd | wc -l` -eq 1 ]; then OSX_PLATFORM="AMD"; else OSX_PLATFORM="INTEL"; fi
 
 if [ ! -e ${TMPDIR} ]; then mkdir ${TMPDIR}; fi;
 if [ ! -e ${LOGDIR} ]; then mkdir ${LOGDIR}; fi;
-if [ ! -e ${BAKDIR} ]; then mkdir ${BAKDIR}; fi;
+if [ ! -e ${BAKPATH} ]; then mkdir ${BAKPATH}; fi;
 
 ################################################################################################################################################################################################
 ################################################################################################################################################################################################
 ################################################################################################################################################################################################
-
+# if flag file for running this script does not exist then
 if [ ! -e /etc/pve/qemu-server/.osx-proxmox ]
 then
 	
@@ -87,18 +88,24 @@ then
 
 	cp ${SCRIPT_DIR}/EFI/*.iso /var/lib/vz/template/iso
 # added: backup .bashrc if it exists
-	if [ -e /root/.bashrc ]; then cp /root/.bashrc ${BAKDIR}/.bashrc; echo "Created backup copy of /root/.bashrc" >>${LOGFILE}; else echo "Creating /root/.bashrc" >>${LOGFILE}; fi;
-
-	echo "alias osx-setup='${SCRIPT_DIR}/setup'" >> /root/.bashrc
+	PATH=/root/
+	FILE=.bashrc
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+# add osx-setup alias to /root/.bashrc
+	echo "alias osx-setup='${SCRIPT_DIR}/setup'" >> ${PATH}${FILE}
 
 # added: backup environment file if it exists
-	if [ -e /etc/environment ]; then cp /etc/environment ${BAKDIR}/environment; echo "Created backup copy of /etc/environment" >>${LOGFILE}; else echo "Creating /etc/environment" >>${LOGFILE}; fi;
-
+	PATH=/etc/
+	FILE=environment
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+# replace /etc/environment contents
 	echo -e "LANG=en_US.UTF-8\nLC_ALL=en_US.UTF-8" > /etc/environment
 
-# added: backup .vimrc file if it exists
-	if [ -e  ~/.vimrc ]; then cp  ~/.vimrc ${BAKDIR}/.vimrc; echo "Created backup copy of ~/.vimrc" >>${LOGFILE}; else echo "Creating ~/.vimrc" >>${LOGFILE}; fi;
-
+# added: backup ~/.vimrc file if it exists
+	PATH=~/
+	FILE=environment
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+# replace ~/.vimrc contents
 	echo "set mouse-=a" > ~/.vimrc
 
 # disabled: do not remove the enterprise repository!!
@@ -119,17 +126,22 @@ then
 	fi
 
 # added logging of already installed packages
-	echo "List of packages already installed" >>${LOGFILE}
-	apt list --installed | grep 'vim\|unzip\|zip\|sysstat\|parted\|wget\|iptraf\|git\|htop' >>${LOGFILE}
-	echo "Installing vim unzip zip sysstat parted wget iptraf git htop" >>${LOGFILE}
+	PACKAGES="'vim\|unzip\|zip|sysstat\|parted\|wget\|iptraf\|git\|htop'"
+	echo "List which of the packages of vim unzip zip sysstat parted wget iptraf git htop are already installed" >>${LOGFILE}
+	apt list --installed | grep ${PACKAGES} >>${LOGFILE}
+	echo "Installing ${PACKAGES}" >>${LOGFILE}
 	apt install vim unzip zip sysstat parted wget iptraf git htop -y >> ${LOGFILE} 2>> ${LOGFILE}
 	if [ $? -ne 0 ]; then echo "Error with `apt-get install ...`"; exit; fi
 
 # added: backup grub if it exists, log changes (multiple!)
-	if [ -e /etc/default/grub ]; then cp /etc/default/grub ${BAKDIR}/grub; echo "Created backup copy of /etc/default/grub" >>${LOGFILE}; fi;
-	echo "Changing GRUB_TIMEOUT=5 to GRUB_TIMEOUT=0 in /etc/default/grub" >>${LOGFILE}
-	sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=0/g' /etc/default/grub
-	echo "Changing GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub" >>${LOGFILE}
+	PATH=/etc/default/
+	FILE=grub
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+	echo "Changing GRUB_TIMEOUT=5 to GRUB_TIMEOUT=0 in ${PATH}${FILE}" >>${LOGFILE}
+	sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=0/g' ${PATH}${FILE}
+	echo "Changing GRUB_CMDLINE_LINUX_DEFAULT in ${PATH}${FILE}" >>${LOGFILE}
+# 
+	PATH=/etc/modprobe.d/
 	if [ ${OSX_PLATFORM} == "AMD" ]
 	then
 		if [ `pveversion | grep -i '7.2\|7.3\|7.4\|8.0\|8.1\|8.2\|8.3\|8.4' | wc -l` -eq 1 ]
@@ -138,8 +150,8 @@ then
 		else
 			sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt video=vesafb:off video=efifb:off"/g' /etc/default/grub
 		fi
-		if [ -e /etc/modprobe.d/kvm-amd.conf ]; then cp /etc/modprobe.d/kvm-amd.conf ${LOGDIR}/kvm-amd.conf; echo "Created backup copy of /etc/modprobe.d/kvm-amd.conf" >>${LOGFILE}; fi;
-		echo "options kvm-amd nested=1" > /etc/modprobe.d/kvm-amd.conf
+		FILE=kvm-amd.conf
+		KVM_OPTIONS="options kvm-amd nested=1"
 	fi
 
 	if [ ${OSX_PLATFORM} == "INTEL" ]
@@ -150,30 +162,46 @@ then
 		else
 			sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt video=vesafb:off video=efifb:off"/g' /etc/default/grub
 		fi
-		if [ -e /etc/modprobe.d/kvm-intel.conf ]; then cp /etc/modprobe.d/kvm-intel.conf ${LOGDIR}/kvm-intel.conf; echo "Created backup copy of /etc/modprobe.d/kvm-intel.conf" >>${LOGFILE}; fi;
-		echo "options kvm-intel nested=Y" > /etc/modprobe.d/kvm-intel.conf
+		FILE=kvm-intel.conf
+		KVM_OPTIONS="options kvm-intel nested=Y"
 	fi
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+# replace modprobe for kvm
+	echo "${KVM_OPTIONS}" > ${PATH}${FILE}
 
 # added backup copy for /etc/modules
-	if [ -e /etc/modules ]; then cp /etc/modules ${LOGDIR}/modules; echo "Created backup copy of /etc/modules" >>${LOGFILE}; fi;
-	echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd\n" >> /etc/modules
+	PATH=/etc/
+	FILE=modules
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+#add vfio, vfio_iommu_type1, vfio_pci, vfio_virqfd lines to /etc/modules
+	echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd\n" >> ${PATH}${FILE}
 
 # added backup copy for /etc/modprobe.d/pve-blacklist.conf
-	if [ -e /etc/modprobe.d/pve-blacklist.conf ]; then cp /etc/modules ${LOGDIR}/pve-blacklist.conf; echo "Created backup copy of /etc/modprobe.d/pve-blacklist.conf" >>${LOGFILE}; fi;
-	echo -e "blacklist nouveau\nblacklist nvidia\nblacklist snd_hda_codec_hdmi\nblacklist snd_hda_intel\nblacklist snd_hda_codec\nblacklist snd_hda_core\nblacklist radeon\nblacklist amdgpu\n" >> /etc/modprobe.d/pve-blacklist.conf
+	PATH=/etc/modprobe.d/
+	FILE=pve-blacklist.conf
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+	echo "Adding blacklist entries to ${PATH}${FILE}" >>${LOGFILE}
+	echo -e "blacklist nouveau\nblacklist nvidia\nblacklist snd_hda_codec_hdmi\nblacklist snd_hda_intel\nblacklist snd_hda_codec\nblacklist snd_hda_core\nblacklist radeon\nblacklist amdgpu\n" >> ${PATH}${FILE}
 
 # added backup copy for /etc/modules
-	if [ -e /etc/modprobe.d/kvm.conf ]; then cp /etc/modprobe.d/kvm.conf ${LOGDIR}/kvm.conf; echo "Created backup copy of /etc/modprobe.d/kvm.conf" >>${LOGFILE}; fi;
-	echo "options kvm ignore_msrs=Y report_ignored_msrs=0" > /etc/modprobe.d/kvm.conf
+	FILE=kvm.conf
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+	echo "Adding kvm ignore values to ${PATH}${FILE}, see https://pve.proxmox.com/wiki/PCI_Passthrough#Tips" >>${LOGFILE}
+	echo "options kvm ignore_msrs=Y report_ignored_msrs=0" > ${PATH}${FILE}
 
 # added backup copy for /etc/modprobe.d/iommu_unsafe_interrupts.conf
-	if [ -e /etc/modprobe.d/iommu_unsafe_interrupts.conf ]; then cp /etc/modprobe.d/iommu_unsafe_interrupts.conf ${LOGDIR}/iommu_unsafe_interrupts.conf; echo "Created backup copy of /etc/modprobe.d/iommu_unsafe_interrupts.conf" >>${LOGFILE}; fi;
-	echo "options vfio_iommu_type1 allow_unsafe_interrupts=1" > /etc/modprobe.d/iommu_unsafe_interrupts.conf
+	FILE=iommu_unsafe_interrupts.conf
+	if [ -e ${PATH}${FILE} ]; then cp ${PATH}${FILE} ${BAKDIR}${FILE}; echo "Created backup copy of ${PATH}${FILE}" >>${LOGFILE}; else echo "Creating ${PATH}${FILE}" >>${LOGFILE}; fi;
+	echo "Adding allow unsafe interrupts to ${PATH}${FILE}" >>${LOGFILE}
+	echo "options vfio_iommu_type1 allow_unsafe_interrupts=1" > ${PATH}${FILE}
 
-	sed -i.backup -z "s/res === null || res === undefined || \!res || res\n\t\t\t.data.status.toLowerCase() \!== 'active'/false/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+# disabled: silent modification of subscription nag
+#	sed -i.backup -z "s/res === null || res === undefined || \!res || res\n\t\t\t.data.status.toLowerCase() \!== 'active'/false/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
 
+# create flag file to signal this setup has been run
 	touch /etc/pve/qemu-server/.osx-proxmox
 
+# tell grub to update to the new settings
 	update-grub >> ${LOGFILE} 2>> ${LOGFILE}
 
 	echo " "
@@ -183,7 +211,7 @@ then
 	echo "After rebooting, RUN: osx-setup"
 	echo " "
 	echo " "
-
+# sleep and do reboot
 	sleep 15s && reboot
 
 fi
