@@ -9,10 +9,13 @@
 #########################################################################################################################
 
 clear
-
+# clear out old install.  Unfortunately, this also clears out the old logs if present
+# so the setup script has been changed to log to /root/OSX-PROXMOX-LOGS
 if [ -e /root/OSX-PROXMOX ]; then rm -rf /root/OSX-PROXMOX; fi;
-if [ -e /etc/apt/sources.list.d/pve-enterprise.list ]; then rm -rf /etc/apt/sources.list.d/pve-enterprise.list; fi;
-if [ -e /etc/apt/sources.list.d/ceph.list ]; then rm -rf /etc/apt/sources.list.d/ceph.list; fi;
+# DISABLED removal of enterprise repository
+# if [ -e /etc/apt/sources.list.d/pve-enterprise.list ]; then rm -rf /etc/apt/sources.list.d/pve-enterprise.list; fi;
+# DISABLED removal of ceph repository
+# if [ -e /etc/apt/sources.list.d/ceph.list ]; then rm -rf /etc/apt/sources.list.d/ceph.list; fi;
 # Is this better?
 echo "Waiting to install OSX-PROXMOX..."
 echo " "
