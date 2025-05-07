@@ -45,7 +45,8 @@ fi
 ################################################################################################################################################################################################
 
 SCRIPT_DIR=/root/OSX-PROXMOX
-LOGDIR=${SCRIPT_DIR}/logs
+# because install.sh deletes the OSX-PROXMOX dir, old logs are destroyed.  So we create a separate directory: OSX-PROXMOX-LOGS
+LOGDIR=${SCRIPT_DIR}-LOGS/logs
 TMPDIR=${SCRIPT_DIR}/tmp
 ISODIR=/var/lib/vz/template/iso/
 HACKPXVERSION="20250502T1020"
